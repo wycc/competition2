@@ -1,7 +1,8 @@
 import torch
 from torchvision import transforms, datasets
-from torch.utils.data import DataLoader
+from torch.utils.data import DataLoader,Subset
 from torch import nn, optim
+from tqdm import tqdm
 
 # set device
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -10,17 +11,19 @@ device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 transform = transforms.Compose([
     transforms.Resize((64, 64)),  # resize
     transforms.ToTensor(),
-    transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))  # normalize
+    transforms.Normalize((0.5, 0.5, 0.5), (0.2, 0.2, 0.2))  # normalize
 ])
 
 # data
-data_dir = 'Traditional-Chinese-Handwriting-Dataset/data/cleaned_data(50_50)'
+data_dir = '/tmp/competition2/Traditional-Chinese-Handwriting-Dataset/data/cleaned_data(50_50)'
 dataset = datasets.ImageFolder(root=data_dir, transform=transform)
+
 train_size = int(0.8 * len(dataset))
 test_size = len(dataset) - train_size
-train_dataset, test_dataset = torch.utils.data.random_split(dataset, [train_size, test_size])
+train_dataset = Subset(dataset, range(0, train_size))
+test_dataset = Subset(dataset, range(train_size, len(dataset)))
 
-train_loader = DataLoader(train_dataset, batch_size=128, shuffle=True)
+train_loader = DataLoader(train_dataset, batch_size=128, shuffle=True, num_workers=4)
 test_loader = DataLoader(test_dataset, batch_size=128)
 
 # model
@@ -36,14 +39,13 @@ class MyModel(nn.Module):
             nn.MaxPool2d(2, 2),
             nn.Conv2d(64, 128, kernel_size=3, stride=1, padding=1),
             nn.ReLU(),
-            nn.MaxPool2d(2, 2)
+            nn.MaxPool2d(2, 2),
         )
         self.fc_layers = nn.Sequential(
             nn.Flatten(),
             nn.Linear(128 * 8 * 8, 128),
             nn.ReLU(),
-            nn.Linear(128, num_classes),
-            nn.LogSoftmax(dim=1)
+            nn.Linear(128, num_classes)
         )
 
     def forward(self, x):
@@ -56,7 +58,7 @@ model = MyModel(num_classes).to(device)
 
 # loss function and optimizer
 loss_fn = nn.CrossEntropyLoss()
-optimizer = optim.Adam(model.parameters(), lr=0.001)
+optimizer = optim.SGD(model.parameters(), lr=0.001)
 
 # model training
 EPOCHS = 10
@@ -65,7 +67,7 @@ for epoch in range(EPOCHS):
     total_loss = 0
     correct = 0
     total = 0
-    for images, labels in train_loader:
+    for idx, (images, labels) in enumerate(tqdm(train_loader)):
         images, labels = images.to(device), labels.to(device)
         outputs = model(images)
         loss = loss_fn(outputs, labels)
@@ -77,9 +79,8 @@ for epoch in range(EPOCHS):
         _, predicted = torch.max(outputs.data, 1)
         total += labels.size(0)
         correct += (predicted == labels).sum().item()
-
     print(f'Epoch {epoch+1}, Loss: {total_loss / total}, Accuracy: {100 * correct / total}%')
 
 
-model_scripted = torch.jit.script(model)  # script
+model_scripted = torch.jit.script(model.to('cpu'))  # script
 model_scripted.save('handwrite_model.pth')  # save model
