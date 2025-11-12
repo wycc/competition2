@@ -126,10 +126,5 @@ competition2/
 - **evaluate.py**: Script to test the trained model. 測試訓練模型的腳本
 - **Traditional-Chinese-Handwriting-Dataset/**: Directory containing the dataset. 包含資料集的目錄
 
-**Contact Information 聯絡資訊**
 
-For any questions or issues, please contact:  
-如有任何問題，請聯絡：
-
-- **Email 電子郵件**: d1300701@cgu.edu.tw
 
